@@ -31,21 +31,19 @@ export class MacdStochRsiCommand {
 
         const data = fs.readFileSync(this.filePath, 'utf8');
 
-        const csvData = this.extractDataFromCsv(data);
+        let csvData = this.extractDataFromCsv(data);
 
         setInterval(() => {
-            
+
             if (csvData.length === 0) {
                 this.inputService.data.complete();
                 return;
             }
-            
+
             this.inputService.data.next(csvData.shift());
 
 
         }, 0);
-
-        // this.runLive();
     }
 
     private extractDataFromCsv(csvData) {
@@ -63,8 +61,8 @@ export class MacdStochRsiCommand {
         })
     }
 
-    // use API for live data https://api.polygon.io/v2/aggs/ticker/X:BTCUSD/range/5/minute/2023-05-09/2023-06-09?adjusted=true&sort=desc&limit=50000&apiKey=vSHjhyE0RBRZpFvnrSgsLgExv3F7nCu2
     async runLive() {
+        
         console.log(`Running macd-stoch-rsi strategy with live data`)
 
         let fromYear = 2022;
@@ -73,7 +71,7 @@ export class MacdStochRsiCommand {
         let toMonth = 2;
         const pairs = [];
 
-        while (fromYear != 2023 || fromMonth != 6) {
+        while (fromYear != 2023 || fromMonth != 7) {
 
             const fromMonthStr = fromMonth < 10 ? `0${fromMonth}` : fromMonth;
             const toMonthStr = toMonth < 10 ? `0${toMonth}` : toMonth;
@@ -102,7 +100,7 @@ export class MacdStochRsiCommand {
         console.log(pairs)
 
         for (const pair of pairs) {
-            const url = `https://api.polygon.io/v2/aggs/ticker/X:ETHUSD/range/5/minute/${pair.fromYear}-${pair.fromMonthStr}-09/${pair.toYear}-${pair.toMonthStr}-08?adjusted=true&sort=asc&limit=50000&apiKey=vSHjhyE0RBRZpFvnrSgsLgExv3F7nCu2`;
+            const url = `https://api.polygon.io/v2/aggs/ticker/X:ETHUSD/range/3/minute/${pair.fromYear}-${pair.fromMonthStr}-09/${pair.toYear}-${pair.toMonthStr}-08?adjusted=true&sort=asc&limit=50000&apiKey=xxx`;
 
             const response = await axios.default.get(url);
 
@@ -132,22 +130,11 @@ export class MacdStochRsiCommand {
 
         fs.writeFileSync(this.filePath, csvData, 'utf-8');
 
-
-        // function for format number (20,000.00)
         function formatNumber(number) {
             return number.toFixed(6).replace(/\d(?=(\d{3})+\.)/g, '$&,');
         }
-
-
-
-
-        // `https://api.polygon.io/v2/aggs/ticker/X:ADAUSD/range/5/minute/${fromYear}-${fromMonth}-09/${toYear}-${toMonth}-08?adjusted=true&sort=asc&limit=50000&apiKey=vSHjhyE0RBRZpFvnrSgsLgExv3F7nCu2`
-
-
-
     }
 
-    // async timeout function
     async sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }

@@ -10,6 +10,33 @@ import { StochasticRSIOutput } from 'technicalindicators/declarations/momentum/S
 import { ConfigService, StopPriceStrategy } from '../config/config.service';
 @Injectable()
 export class TaService {
+    calculateEma(arg0: number[], arg1?: number) {
+
+        const indicator = ta.EMA.calculate({
+            values: arg0,
+            period: arg1 || this.configService.ema.period
+        });
+
+        return indicator[indicator.length - 1];
+
+
+    }
+    calculateAdx(data: TimeframeDto[]) {
+
+        const indicator = ta.ADX.calculate({
+            high: data.map(d => d.high),
+            low: data.map(d => d.low),
+            close: data.map(d => d.close),
+            period: this.configService.atr.period,
+            
+        });
+
+        // get last 2 values
+        return {
+            adx: indicator[indicator.length - 1],
+            prevAdx: indicator[indicator.length - 2]
+        }
+    }
 
 
     constructor(
@@ -20,13 +47,15 @@ export class TaService {
 
         let change = this.calculateChangePercentage(price, close);
 
-        if(direction === 'short') change *= -1;
+        if (direction === 'short') change *= -1;
 
         console.log(`PnL: ${this.configService.amount * change}. Change: ${change}`);
 
         this.configService.amount = this.configService.amount + this.configService.amount * change;
 
         console.log(`New amount: ${this.configService.amount}`);
+
+        if(this.configService.amount <= 0) throw new Error('Amount is 0');
 
         return this.configService.amount * change;
     }
@@ -35,6 +64,7 @@ export class TaService {
 
         const indicator = RSI.calculate({
             values: data,
+
             period: this.configService.rsi.period
         });
 
@@ -54,6 +84,21 @@ export class TaService {
         return indicator[indicator.length - 1]
     }
 
+    calculateBollingerBands(data: number[]) {
+
+        const indicator = ta.BollingerBands.calculate({
+            values: data,
+            period: this.configService.atr.period,
+            stdDev: 2.5
+        });
+
+
+        return {
+            prevBb: indicator[indicator.length - 1],
+            bb: indicator[indicator.length - 1]
+        }
+    }
+
     calculateMACD(data: number[]) {
 
         const indicator = MACD.calculate({
@@ -65,7 +110,10 @@ export class TaService {
             SimpleMASignal: false
         });
 
-        return indicator[indicator.length - 1]
+        return {
+            macd: indicator[indicator.length - 1],
+            prevMacd: indicator[indicator.length - 2]
+        }
     }
 
     calculateEmas(data: number[]) {
@@ -78,17 +126,69 @@ export class TaService {
         return indicator[indicator.length - 1]
     }
 
+    calculateVWap(data: TimeframeDto[]) {
+
+        const indicator = ta.VWAP.calculate({
+
+            high: data.map(d => d.high),
+            low: data.map(d => d.low),
+            close: data.map(d => d.close),
+            volume: data.map(d => d.volume)
+        });
+
+        return {
+            prevVwap: indicator[indicator.length - 2],
+            vwap: indicator[indicator.length - 1]
+        }
+    }
+
     getStopPrices(prices: TimeframeDto[], entryPrice: TimeframeDto, direction: 'long' | 'short' = 'long'): { stopLossPrice: any; takeProfitPrice: any; } {
 
         if (this.configService.stopPrice.strategy === StopPriceStrategy.ATR) {
             return this.calculateAtrStopPrices(prices, entryPrice, direction);
         } else if (this.configService.stopPrice.strategy === StopPriceStrategy.SWING_LOW) {
             return this.calculateSwingLowStopPrices(prices, entryPrice, direction);
-        } return {
+        } else if (this.configService.stopPrice.strategy === StopPriceStrategy.EMA) {
+            return this.calculateEmaStopPrices(prices, entryPrice, direction);
+        }
+
+        return {
             stopLossPrice: 0,
             takeProfitPrice: 0
         }
     }
+    calculateEmaStopPrices(prices: TimeframeDto[], entryPrice: TimeframeDto, direction: string): { stopLossPrice: any; takeProfitPrice: any; } {
+
+        const { low, high, close, open } = entryPrice;
+        const candleDirection = open < close ? 'long' : 'short';
+
+        let change = 0;
+
+        if (candleDirection == 'long')
+            change = close - low;
+        else
+            change = high - close;
+
+        let percentChange = change / close * 100;
+        let stopLossPrice = 0;
+        if (candleDirection === 'long') {
+
+            stopLossPrice = close - change;
+            if (percentChange > 0.5) {
+                stopLossPrice = this.calculateEma(prices.map(p => p.close), this.configService.ema.period);
+            }
+        }
+        else {
+            stopLossPrice = close + change;
+            if (percentChange > 0.5) {
+                stopLossPrice = this.calculateEma(prices.map(p => p.close), this.configService.ema.period);
+            }
+        }
+
+        return this.getPrices(entryPrice, stopLossPrice, candleDirection);
+
+    }
+
     calculateSwingLowStopPrices(prices: TimeframeDto[], entryPrice: TimeframeDto, direction: 'long' | 'short') {
 
         let stopLossPrice = 0;
@@ -226,9 +326,11 @@ export class TaService {
             high: data.map(d => d.high),
             low: data.map(d => d.low),
             close: data.map(d => d.close),
-            period: this.configService.atr.period
+            period: this.configService.atr.period,
+
         });
 
         return atr[atr.length - 1];
     }
+    
 }

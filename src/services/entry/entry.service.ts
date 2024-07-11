@@ -87,7 +87,6 @@ export class EntryService {
 
     generateSummary() {
 
-        // group pby month
         const groupedByMonth = this.takenExitTrades.reduce((acc, trade) => {
 
             const month = new Date(trade.time).getMonth();
